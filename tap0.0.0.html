@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Avoid the Circles</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body, html {
+      width: 100%;
+      height: 100%;
+      background: #f0f0f0;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    #gameCanvas {
+      background: #ffffff;
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #ccc;
+    }
+    #score {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Score: 0</div>
+  <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+  <script>
+    // ========================
+    // 遊戲主要參數設定
+    // ========================
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // 玩家角色參數
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 50,
+      width: 40,
+      height: 40,
+      speed: 10
+    };
+
+    // 圓形物件的清單
+    let circles = [];
+
+    // 分數
+    let score = 0;
+
+    // 遊戲進行中狀態
+    let gameOver = false;
+
+    // 追蹤鍵盤按下情況
+    let leftPressed = false;
+    let rightPressed = false;
+
+    // 每 0.1 秒增加分數
+    const scoreInterval = setInterval(() => {
+      if (!gameOver) {
+        score++;
+        document.getElementById("score").textContent = "Score: " + score;
+      }
+    }, 100);
+
+    // 隨機生成圓形的函式
+    function spawnCircle() {
+      // 隨機大小
+      const radius = Math.floor(Math.random() * 50) + 20; 
+      // 隨機顏色
+      const color = "#" + Math.floor(Math.random() * 16777215).toString(16);
+      // 隨機 x 位置
+      const x = Math.random() * (canvas.width - radius * 2) + radius;
+      // 初始 y 在畫面上方
+      const y = -radius;
+      // 下落速度 (可調整)
+      const speedY = Math.random() * 5 + 1;  
+      // 退去方向（隨機往左或往右）
+      const retreatDirection = Math.random() < 0.5 ? -1 : 1; 
+      
+      const circle = {
+        x: x,
+        y: y,
+        radius: radius,
+        color: color,
+        speedY: speedY,
+        retreatDirection: retreatDirection
+      };
+
+      circles.push(circle);
+    }
+
+    // 每隔固定時間就生成一個新圓形
+    setInterval(spawnCircle, 1000); // 每 1 秒產生一顆
+
+    // 監聽鍵盤事件
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "ArrowLeft") {
+        leftPressed = true;
+      } else if (e.code === "ArrowRight") {
+        rightPressed = true;
+      }
+    });
+
+    document.addEventListener("keyup", (e) => {
+      if (e.code === "ArrowLeft") {
+        leftPressed = false;
+      } else if (e.code === "ArrowRight") {
+        rightPressed = false;
+      }
+    });
+
+    // 與玩家碰撞判定
+    function checkCollision(circle) {
+      // 先計算玩家角色和圓的中心位置
+      const playerCenterX = player.x + player.width / 2;
+      const playerCenterY = player.y + player.height / 2;
+
+      const distX = circle.x - playerCenterX;
+      const distY = circle.y - playerCenterY;
+      const distance = Math.sqrt(distX * distX + distY * distY);
+
+      // 如果距離小於(玩家的一半對角線 + 圓半徑)，就當碰撞
+      // 這邊簡化，因為玩家是方形，可視需求調整碰撞範圍計算
+      const diagonal = Math.sqrt((player.width / 2) ** 2 + (player.height / 2) ** 2);
+      if (distance < circle.radius + diagonal) {
+        return true;
+      }
+      return false;
+    }
+
+    // 遊戲主要更新邏輯
+    function update() {
+      if (gameOver) return;
+
+      // 1) 更新玩家位置
+      if (leftPressed) {
+        player.x -= player.speed;
+        if (player.x < 0) player.x = 0;
+      }
+      if (rightPressed) {
+        player.x += player.speed;
+        if (player.x + player.width > canvas.width) {
+          player.x = canvas.width - player.width;
+        }
+      }
+
+      // 2) 更新每個圓位置
+      for (let i = circles.length - 1; i >= 0; i--) {
+        const c = circles[i];
+        c.y += c.speedY; 
+
+        // 檢查是否碰到玩家
+        if (checkCollision(c)) {
+          // 碰到玩家就結束遊戲
+          gameOver = true;
+          clearInterval(scoreInterval);
+          alert("Game Over! Your Score: " + score);
+          return;
+        }
+
+        // 若圓落到底部 (或接近底部)，就讓它往左右退去，消失
+        if (c.y - c.radius > canvas.height - 20) {
+          c.x += c.retreatDirection * 5;  // 向左或向右
+          c.y += 5;                      // 再往下推一點
+          // 移出畫面就刪除
+          if (c.x + c.radius < 0 || c.x - c.radius > canvas.width) {
+            circles.splice(i, 1);
+          }
+        }
+      }
+    }
+
+    // 遊戲畫面繪製
+    function draw() {
+      // 清除畫布
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 繪製玩家角色
+      ctx.fillStyle = "#0095DD";
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // 繪製所有圓形
+      circles.forEach((c) => {
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.radius, 0, Math.PI * 2);
+        ctx.fillStyle = c.color;
+        ctx.fill();
+        ctx.closePath();
+      });
+    }
+
+    // 遊戲主要迴圈
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // 開始遊戲
+    gameLoop();
+  </script>
+</body>
+</html>
