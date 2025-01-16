@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>2D Game Demo</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #333;
+      overflow: hidden;
+    }
+    #gameCanvas {
+      background: #ce9edd;
+      display: block;
+      margin: 0 auto;
+      border: 1px solid #ccc;
+    }
+    .scoreBoard {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      color: #fff;
+      font-family: sans-serif;
+    }
+    <!-- .gameOverMsg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 36px;
+      color: #ff5555;
+      font-family: sans-serif;
+      display: none; /* 遊戲結束時才顯示 */
+    } -->
+  </style>
+</head>
+<body>
+<div class="scoreBoard" id="scoreBoard">Score: 0</div>
+<div class="gameOverMsg" id="gameOverMsg">GAME OVER<br>Press [Space] to Restart</div>
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+
+<script>
+  // 取得 Canvas 與 2D context
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");
+
+  // 分數顯示與遊戲結束訊息
+  const scoreBoard = document.getElementById("scoreBoard");
+  const gameOverMsg = document.getElementById("gameOverMsg");
+
+  // 畫布尺寸
+  const W = canvas.width;
+  const H = canvas.height;
+
+  // 地板 (玩家所站的高度)
+  const groundY = H - 40;
+
+  // 玩家參數
+  let playerX = W / 2;         // 玩家起始位置 (水平)
+  const playerY = groundY;     // 玩家始終站在地板線上
+  const playerWidth = 10;
+  const playerHeight = 10;
+  const playerSpeed = 5;       // 玩家左右移動速度
+
+  // 控制鍵
+  let keyLeft = false;
+  let keyRight = false;
+
+  // 遊戲控制
+  let gameOver = false;
+  let score = 0;
+  let scoreInterval = null;
+  let spawnInterval = null;
+  let animationFrameId = null;
+
+  // 監聽鍵盤事件
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "ArrowLeft") keyLeft = true;
+    if (e.code === "ArrowRight") keyRight = true;
+
+    // 如果遊戲結束，按下空白鍵可重新開始
+    if (gameOver && e.code === "Space") {
+      resetGame();
+    }
+  });
+
+  document.addEventListener("keyup", (e) => {
+    if (e.code === "ArrowLeft") keyLeft = false;
+    if (e.code === "ArrowRight") keyRight = false;
+  });
+
+  // --------------------------------
+  // 球的資料結構與方法
+  // --------------------------------
+  class Ball {
+    constructor(x, y, radius, color, vx, vy) {
+      this.x = x;
+      this.y = y;
+      this.radius = radius;
+      this.color = color;
+      this.vx = vx;          // 水平速度
+      this.vy = vy;          // 垂直速度
+      this.gravity = 0.2;    // 模擬重力
+      this.bounce = 0.95;     // 彈力係數
+    }
+
+    update() {
+      // 重力影響
+      this.vy += this.gravity;
+
+      // 更新位置
+      this.x += this.vx;
+      this.y += this.vy;
+
+      // 與地板碰撞偵測
+      if (this.y + this.radius > groundY) {
+        this.y = groundY - this.radius; // 修正回地板線上
+        this.vy = -this.vy * this.bounce;
+      }
+    }
+
+    draw(ctx) {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+      ctx.closePath();
+    }
+  }
+
+  // 存放所有球的陣列
+  let balls = [];
+
+  // --------------------------------
+  // 遊戲流程
+  // --------------------------------
+
+  // 產生一顆從「左上」落下的球，以及一顆從「右上」落下的球
+  function spawnBalls() {
+    // ---- 左邊球 ----
+    {
+      const radius = Math.random() * 30 + 10; // 半徑 10~25
+      const x = radius + 10;                  // 靠左生成
+      const y = -(radius + 10);              // 畫面上方外(更高處)
+      const color = getRandomColor();
+      const vx = Math.random() * 2 + 1;       // 落地後會往右滾
+      const vy = 0;                           // 初始垂直速度
+      const ballLeft = new Ball(x, y, radius, color, vx, vy);
+      balls.push(ballLeft);
+    }
+
+    // ---- 右邊球 ----
+    {
+      const radius = Math.random() * 15 + 40; // 半徑 10~25
+      const x = W - (radius + 10);            // 靠右生成
+      const y = -(radius + 10);              // 畫面上方外(更高處)
+      const color = getRandomColor();
+      const vx = -(Math.random() * 2 + 1);    // 落地後會往左滾
+      const vy = 0;                           // 初始垂直速度
+      const ballRight = new Ball(x, y, radius, color, vx, vy);
+      balls.push(ballRight);
+    }
+  }
+
+  // 取得隨機顏色
+  function getRandomColor() {
+    const r = Math.floor(Math.random() * 256);
+    const g = Math.floor(Math.random() * 256);
+    const b = Math.floor(Math.random() * 256);
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  // 每 0.2 秒加 1 分
+  function startScoreCounting() {
+    // 先確保分數歸零
+    score = 0;
+    // 顯示初始分數
+    scoreBoard.textContent = `Score: ${score}`;
+    // 每 200ms +1 分
+    scoreInterval = setInterval(() => {
+      score++;
+      scoreBoard.textContent = `Score: ${score}`;
+    }, 200);
+  }
+
+  // 遊戲主迴圈
+  function gameLoop() {
+    update();
+    draw();
+    // 若沒有結束才持續呼叫 gameLoop
+    if (!gameOver) {
+      animationFrameId = requestAnimationFrame(gameLoop);
+    }
+  }
+
+  // 更新邏輯
+  function update() {
+    // 更新玩家位置
+    if (keyLeft) {
+      playerX -= playerSpeed;
+      if (playerX < 0) playerX = 0;
+    }
+    if (keyRight) {
+      playerX += playerSpeed;
+      if (playerX + playerWidth > W) playerX = W - playerWidth;
+    }
+
+    // 更新球的位置
+    for (let i = 0; i < balls.length; i++) {
+      balls[i].update();
+
+      // 如果球超出左右畫面很遠或太高，也可移除以節省效能
+      // 這裡簡單判斷，只要在螢幕兩倍高度內即可
+      if (
+        balls[i].x + balls[i].radius < -50 ||
+        balls[i].x - balls[i].radius > W + 50 ||
+        balls[i].y - balls[i].radius > H * 2
+      ) {
+        balls.splice(i, 1);
+        i--;
+        continue;
+      }
+
+      // 檢查球與玩家是否碰撞 (簡易矩形 vs 圓形碰撞)
+      if (checkCollision(balls[i])) {
+        endGame();
+        return; // 直接結束，不再往下判斷
+      }
+    }
+  }
+
+  // 繪製畫面
+  function draw() {
+    // 清空畫布
+    ctx.clearRect(0, 0, W, H);
+
+    // 畫地板
+    ctx.beginPath();
+    ctx.moveTo(0, groundY);
+    ctx.lineTo(W, groundY);
+    ctx.strokeStyle = "#666";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.closePath();
+
+    // 畫玩家 (用矩形示意)
+    ctx.fillStyle = "yellow";
+    ctx.fillRect(playerX, playerY - playerHeight, playerWidth, playerHeight);
+
+    // 畫球
+    for (let i = 0; i < balls.length; i++) {
+      balls[i].draw(ctx);
+    }
+  }
+
+  // 檢查球與玩家的碰撞 (簡易的矩形 vs 圓形判定)
+  function checkCollision(ball) {
+    // 玩家矩形範圍
+    const playerLeft = playerX;
+    const playerRight = playerX + playerWidth;
+    const playerTop = playerY - playerHeight;
+    const playerBottom = playerY;
+
+    // 球中心
+    const cx = ball.x;
+    const cy = ball.y;
+    const r = ball.radius;
+
+    // 若球的「邊界」侵入玩家矩形，就算碰撞
+    // 條件： (球的右邊) > (玩家的左邊)
+    //     && (球的左邊) < (玩家的右邊)
+    //     && (球的下邊) > (玩家的上邊)
+    //     && (球的上邊) < (玩家的下邊)
+    if (
+      cx + r > playerLeft &&
+      cx - r < playerRight &&
+      cy + r > playerTop &&
+      cy - r < playerBottom
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  // 遊戲結束
+  function endGame() {
+    gameOver = true;
+    // 停止動畫循環
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+
+    // 停止計分
+    clearInterval(scoreInterval);
+    scoreInterval = null;
+
+    // 停止生成球
+    clearInterval(spawnInterval);
+    spawnInterval = null;
+
+    // 顯示 Game Over 訊息
+    gameOverMsg.style.display = "block";
+  }
+
+  // 重置遊戲
+  function resetGame() {
+    // 隱藏 Game Over 訊息
+    gameOverMsg.style.display = "none";
+
+    // 清空球、分數歸零、重新設定玩家位置
+    balls = [];
+    score = 0;
+    playerX = W / 2;
+    gameOver = false;
+
+    // 重新開始計時、分數和動畫
+    startGame();
+  }
+
+  // 開始遊戲流程
+  function startGame() {
+    // 啟動計分（每 0.2 秒加 1 分）
+    startScoreCounting();
+
+    // 開始生成球 (每 1.5 秒生成一批，批量包含左一顆、右一顆)
+    spawnInterval = setInterval(spawnBalls, 1500);
+
+    // 立即生成一次，避免等待
+    spawnBalls();
+
+    // 開始遊戲主迴圈
+    gameLoop();
+  }
+
+  // 先初始化一次
+  startGame();
+</script>
+</body>
+</html>
