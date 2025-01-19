@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>絕對公平的抽籤！</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      position: relative; /* 讓絕對定位可參考body範圍 */
+    }
+
+    /* edit mode */
+    .config-panel {
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .config-panel h2 {
+      margin-top: 0;
+    }
+    .options-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 10px;
+    }
+    .options-table th, .options-table td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+    .options-table input {
+      width: 90%;
+    }
+    .hidden {
+      display: none !important;
+    }
+
+    /* wheel */
+    .wheel-container {
+      text-align: center;
+      margin-top: 40px;
+    }
+    #wheelCanvas {
+      background: #fff;
+      border: 2px solid #999;
+      border-radius: 50%;
+    }
+
+    /* banners */
+    .banner {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #f0c040;
+      padding: 10px 20px;
+      border-radius: 8px;
+      display: none;
+      font-size: 16px;
+      font-weight: bold;
+      z-index: 1000;
+    }
+    .close-banner {
+      margin-left: 20px;
+      cursor: pointer;
+      color: #666;
+    }
+    .summary-banner {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #40c0f0;
+      padding: 10px 20px;
+      border-radius: 8px;
+      display: none;
+      font-size: 16px;
+      font-weight: bold;
+      z-index: 1000;
+    }
+
+    /* button css */
+    .btn-lilac {
+      background: #ffccff;
+      border: none;
+      border-radius: 20px;
+      font-size: 16px;
+      padding: 10px 20px;
+      transform: scale(1.5);
+      cursor: pointer;
+      margin: 0 5px;
+      transition: filter 0.2s;
+    }
+    .btn-lilac:hover {
+      filter: brightness(110%);
+    }
+    .btn-green {
+      background: #99ff99;
+      border: none;
+      border-radius: 20px;
+      font-size: 16px;
+      padding: 10px 20px;
+      transform: scale(1.5);
+      cursor: pointer;
+      margin: 0 5px;
+      transition: filter 0.2s;
+    }
+    .btn-green:hover {
+      filter: brightness(110%);
+    }
+
+    /* ecs btn */
+    #exitDrawModeBtn {
+      position: absolute;
+      top: 30px;
+      left: 30px;
+      z-index: 1000; 
+    }
+
+    .button-group {
+      margin-top: 40px;
+    }
+    .button-group button {
+      margin: 0 40px; /* 讓兩按鈕間隔 40px */
+    }
+  </style>
+</head>
+<body>
+
+<!-- edit mode -->
+<div class="config-panel" id="configPanel">
+  <h2>輪盤設定</h2>
+  <table class="options-table">
+    <thead>
+      <tr>
+        <th>選項名稱</th>
+        <th>無意義的數字</th>
+        <th>刪除</th>
+      </tr>
+    </thead>
+    <tbody id="optionsTableBody">
+      <!-- 動態插入 -->
+    </tbody>
+  </table>
+  <button id="addOptionBtn">新增選項</button>
+  <br><br>
+  <button id="enterDrawModeBtn" class="btn-green">進入抽籤</button>
+</div>
+
+<!-- 抽籤模式 按鈕 -->
+<button id="exitDrawModeBtn" class="btn-green hidden">退出</button>
+
+<!-- 輪盤容器 -->
+<div id="wheelContainer" class="wheel-container hidden">
+  <canvas id="wheelCanvas" width="400" height="400"></canvas>
+
+  <div class="button-group">
+    <button id="startDrawBtn" class="btn-lilac">開始抽獎</button>
+    <button id="finishDrawBtn" class="btn-lilac">完成抽獎</button>
+  </div>
+</div>
+
+<!-- 中籤訊息 (含「隱藏此選項」按鈕) -->
+<div class="banner" id="banner">
+  <span id="bannerText"></span>
+  <button id="hideOptionBtn" style="margin-left:20px;">隱藏此選項</button>
+  <span class="close-banner" onclick="closeBanner()">關閉</span>
+</div>
+
+<!-- 總結訊息 -->
+<div class="summary-banner" id="summaryBanner">
+  <span id="summaryText"></span>
+  <span class="close-banner" onclick="closeSummary()">關閉</span>
+</div>
+
+<script>
+// =====================================================
+// 全域資料/DOM 參考
+// =====================================================
+let allItems = []; // { name, indexValue, drawn, hidden }
+let originalItems = [];  // 進入抽籤模式時的快照
+let drawnResults = [];   // 只在 隱藏時 才將該選項加入這裡
+let currentWinner = null; // 這次抽到的項目
+
+const optionsTableBody = document.getElementById('optionsTableBody');
+const addOptionBtn = document.getElementById('addOptionBtn');
+const enterDrawModeBtn = document.getElementById('enterDrawModeBtn');
+const exitDrawModeBtn = document.getElementById('exitDrawModeBtn');
+const wheelContainer = document.getElementById('wheelContainer');
+const startDrawBtn = document.getElementById('startDrawBtn');
+const finishDrawBtn = document.getElementById('finishDrawBtn');
+
+const banner = document.getElementById('banner');
+const bannerText = document.getElementById('bannerText');
+const hideOptionBtn = document.getElementById('hideOptionBtn');
+const summaryBanner = document.getElementById('summaryBanner');
+const summaryText = document.getElementById('summaryText');
+
+// Canvas
+const wheelCanvas = document.getElementById('wheelCanvas');
+const ctx = wheelCanvas.getContext('2d');
+const canvasSize = 400;
+const centerX = canvasSize / 2;
+const centerY = canvasSize / 2;
+const radius = canvasSize / 2;
+
+// 指針放大
+const pointerOffset = 30; 
+const pointerSide = 15;
+
+// 輪盤當前角度
+let currentRotation = 0;
+// 動畫鎖
+let isSpinning = false;
+
+
+// =====================================================
+// 初始化：先加幾個示範選項
+// (可自行改成15個以上測試)
+// =====================================================
+addOptionRow('選項A', 50);
+addOptionRow('選項B', 30);
+addOptionRow('選項C', 10);
+
+syncFromTable();
+renderWheel(currentRotation);
+
+// =====================================================
+// 事件綁定
+// =====================================================
+
+// 新增表格行
+addOptionBtn.addEventListener('click', () => {
+  addOptionRow('', 0);
+});
+
+// 進入抽籤模式
+enterDrawModeBtn.addEventListener('click', () => {
+  syncFromTable();
+  originalItems = deepCopy(allItems);
+  drawnResults = [];
+  currentRotation = 0;
+
+  document.getElementById('configPanel').classList.add('hidden');
+  wheelContainer.classList.remove('hidden');
+  exitDrawModeBtn.classList.remove('hidden');
+
+  renderWheel(currentRotation);
+});
+
+// 退出抽籤模式
+exitDrawModeBtn.addEventListener('click', () => {
+  allItems = deepCopy(originalItems);
+  currentRotation = 0;
+  isSpinning = false;
+
+  closeBanner();
+  closeSummary();
+
+  document.getElementById('configPanel').classList.remove('hidden');
+  wheelContainer.classList.add('hidden');
+  exitDrawModeBtn.classList.add('hidden');
+  renderWheel(currentRotation);
+});
+
+// 開始抽籤
+startDrawBtn.addEventListener('click', () => {
+  startDraw();
+});
+
+// 抽獎完成 => 顯示中籤總結
+finishDrawBtn.addEventListener('click', () => {
+  showSummary();
+});
+
+// 按「隱藏此選項」 => 正式中籤，從輪盤移除
+hideOptionBtn.addEventListener('click', () => {
+  if (!currentWinner) return;
+  currentWinner.drawn = true;
+  currentWinner.hidden = true;
+
+  drawnResults.push(currentWinner.name);
+
+  renderWheel(currentRotation);
+  closeBanner();
+});
+
+// 【空白鍵】再抽一次
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    startDraw();
+  }
+});
+
+// =====================================================
+// 函式：新增表格行
+// =====================================================
+function addOptionRow(name, indexVal) {
+  const tr = document.createElement('tr');
+  const tdName = document.createElement('td');
+  const tdValue = document.createElement('td');
+  const tdAction = document.createElement('td');
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.value = name;
+
+  const valueInput = document.createElement('input');
+  valueInput.type = 'number';
+  valueInput.min = 0;
+  valueInput.value = indexVal;
+
+  const removeBtn = document.createElement('button');
+  removeBtn.textContent = '刪除';
+  removeBtn.addEventListener('click', () => {
+    tr.remove();
+  });
+
+  tdName.appendChild(nameInput);
+  tdValue.appendChild(valueInput);
+  tdAction.appendChild(removeBtn);
+
+  tr.appendChild(tdName);
+  tr.appendChild(tdValue);
+  tr.appendChild(tdAction);
+
+  optionsTableBody.appendChild(tr);
+}
+
+// =====================================================
+// 函式：同步(表格 -> allItems)
+// =====================================================
+function syncFromTable() {
+  const rows = optionsTableBody.querySelectorAll('tr');
+  let tempArr = [];
+
+  rows.forEach(row => {
+    const name = row.querySelector('td:nth-child(1) input').value.trim();
+    const val = parseFloat(row.querySelector('td:nth-child(2) input').value) || 0;
+    if (name) {
+      const existed = allItems.find(it => it.name === name);
+      if (existed) {
+        existed.indexValue = val;
+        tempArr.push(existed);
+      } else {
+        tempArr.push({
+          name,
+          indexValue: val,
+          drawn: false,
+          hidden: false
+        });
+      }
+    }
+  });
+
+  allItems = tempArr;
+}
+
+// =====================================================
+// 開始抽籤
+// =====================================================
+function startDraw() {
+    if (isSpinning) return;
+    closeBanner();
+    closeSummary();
+  
+    // 可抽清單：indexValue>0 && !hidden
+    let candidateList = allItems.filter(it => !it.hidden && it.indexValue > 0);
+    if (!candidateList.length) {
+      alert('沒有可抽的籤(都隱藏或加權=0)！');
+      return;
+    }
+  
+    // 用加權指數抽出中籤
+    let winner = getWeightedRandomOption(candidateList);
+    currentWinner = winner;
+  
+  // 過濾出可見選項
+  let visibleArr = allItems.filter(it => !it.hidden);
+  let visibleCount = visibleArr.length;
+  
+  // 找到中獎者在可見選項中的索引
+  let winnerIndex = visibleArr.indexOf(winner);
+  if (winnerIndex < 0) {
+    console.error('winner not in visibleArr??');
+    return;
+  }
+  
+  // 每個選項的角度範圍
+  let sliceAngle = (2 * Math.PI) / visibleCount;
+  
+  // 計算每個選項的當前中心角度
+  // 起始點是 3 點鐘方向，考慮 currentRotation 的影響
+  let optionAngles = visibleArr.map((_, index) => {
+    return (currentRotation + index * sliceAngle + sliceAngle / 2) % (2 * Math.PI);
+  });
+  
+  // 找到中獎選項的目標角度
+  let winnerCenterAngle = optionAngles[winnerIndex];
+  
+  // 計算最終旋轉角度
+  let baseRotation = 2 * Math.PI * 6; // 6圈 => 可自訂
+  let finalRotation = currentRotation + baseRotation + (2 * Math.PI - winnerCenterAngle);
+  
+  // 兩段式動畫: 快速旋轉後減速到中獎選項
+  spinWheelWithDeceleration(finalRotation, () => {
+    bannerText.textContent = `${winner.name} 中籤！`;
+    banner.style.display = 'inline-block';
+  });
+  
+  
+  
+  
+  
+  }
+
+// =====================================================
+// 加權指數抽中
+// =====================================================
+function getWeightedRandomOption(arr) {
+  let total = arr.reduce((sum, o) => sum + o.indexValue, 0);
+  let r = Math.random() * total;
+  for (let o of arr) {
+    if (r < o.indexValue) return o;
+    r -= o.indexValue;
+  }
+  // 理論上不會到這
+  return arr[arr.length - 1];
+}
+
+// =====================================================
+// 兩段式動畫：
+//   1) Phase1 (2秒)：用接近常速(或較快)快速旋轉
+//   2) Phase2：接續進行自然 "ease-out" 減速，直到停在 finalRotation
+// =====================================================
+function spinWheelWithDeceleration(finalRotation, callback) {
+  isSpinning = true;
+
+  const startRotation = currentRotation;
+  const totalDistance = finalRotation - startRotation;
+
+  // 設定階段時長 (可自行微調)
+  const phase1Duration = 2000; // 2秒快轉
+  const phase2Duration = 2000; // 2秒減速
+  const startTime = performance.now();
+
+  requestAnimationFrame(function animate(now) {
+    let elapsed = now - startTime;
+
+    if (elapsed < phase1Duration) {
+      // --- Phase 1: 快速旋轉 (約等速)
+      let p = elapsed / phase1Duration; // 0..1
+      // 決定 Phase1 要先走多少距離 (例如 70%)
+      let phase1Portion = 0.7;  // 前2秒走 70% 的角度
+      let currentDist = totalDistance * phase1Portion * p; 
+      let tmpRotation = startRotation + currentDist;
+      renderWheel(tmpRotation);
+      requestAnimationFrame(animate);
+
+    } else if (elapsed < phase1Duration + phase2Duration) {
+      // --- Phase 2: ease-out 減速
+      let t = (elapsed - phase1Duration) / phase2Duration; // 0..1
+      // easeOutCubic/easeOutQuad/easeOutExpo 等 => 讓後半段自然減速
+      let e = easeOutCubic(t);
+
+      let phase1Portion = 0.7;
+      let distPhase1 = totalDistance * phase1Portion;   // 前段距離
+      let distPhase2 = totalDistance * (1 - phase1Portion); // 後段距離
+
+      let tmpRotation = startRotation + distPhase1 + distPhase2 * e;
+      renderWheel(tmpRotation);
+      requestAnimationFrame(animate);
+
+    } else {
+      // --- 完成
+      // 最後設定 currentRotation
+      currentRotation = finalRotation % (2 * Math.PI);
+      // 防負數
+      if (currentRotation < 0) currentRotation += 2 * Math.PI;
+      // 四捨五入避免小誤差
+      currentRotation = parseFloat(currentRotation.toFixed(6));
+
+      renderWheel(currentRotation);
+      isSpinning = false;
+      callback && callback();
+    }
+  });
+}
+
+// ======== 常見 ease-out 函式 (可自行改用 easeOutQuad, easeOutExpo等) ========
+function easeOutCubic(x) {
+  return 1 - Math.pow(1 - x, 3);
+}
+
+// =====================================================
+// 繪製輪盤
+// =====================================================
+function renderWheel(rotation) {
+  ctx.clearRect(0, 0, canvasSize, canvasSize);
+
+  let visibleArr = allItems.filter(it => !it.hidden);
+  let count = visibleArr.length;
+  if (!count) {
+    drawPointer();
+    return;
+  }
+
+  let sliceAngle = (2 * Math.PI) / count;
+
+  // 移動+旋轉
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.rotate(rotation);
+
+  for (let i = 0; i < count; i++) {
+    let startA = i * sliceAngle;
+    let endA = startA + sliceAngle;
+
+    // 扇形
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, radius, startA, endA);
+    ctx.fillStyle = getColorForIndex(i);
+    ctx.fill();
+    ctx.closePath();
+
+    // 文字
+    let textAngle = startA + sliceAngle / 2;
+    ctx.save();
+    ctx.rotate(textAngle);
+    ctx.translate(radius * 0.85, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 150% sans-serif';
+    ctx.fillText(visibleArr[i].name, 0, 0);
+    ctx.restore();
+  }
+
+  // 中心小白點
+  ctx.beginPath();
+  ctx.arc(0, 0, 10, 0, 2 * Math.PI);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+
+  ctx.restore();
+
+  drawPointer();
+}
+
+// =====================================================
+// 畫固定大指針
+// =====================================================
+function drawPointer() {
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(centerX + radius - pointerOffset, centerY);
+  ctx.lineTo(centerX + radius, centerY + pointerSide);
+  ctx.lineTo(centerX + radius, centerY - pointerSide);
+  ctx.fillStyle = 'red';
+  ctx.fill();
+  ctx.restore();
+}
+
+// =====================================================
+// 取扇形顏色
+// =====================================================
+function getColorForIndex(idx) {
+  const colors = [
+    '#FF9999','#FFCC99','#FFFF99','#CCFF99','#99FF99',
+    '#99FFCC','#99FFFF','#99CCFF','#9999FF','#CC99FF',
+    '#FF99FF','#FF99CC'
+  ];
+  return colors[idx % colors.length];
+}
+
+// =====================================================
+// 加權指數抽中
+// =====================================================
+function getWeightedRandomOption(arr) {
+  let total = arr.reduce((sum, o) => sum + o.indexValue, 0);
+  let r = Math.random() * total;
+  for (let o of arr) {
+    if (r < o.indexValue) return o;
+    r -= o.indexValue;
+  }
+  // 理論上不會到
+  return arr[arr.length - 1];
+}
+
+// =====================================================
+// 顯示/關閉 橫幅
+// =====================================================
+function showBanner(msg) {
+  bannerText.textContent = msg;
+  banner.style.display = 'inline-block';
+}
+function closeBanner() {
+  banner.style.display = 'none';
+}
+function showSummary() {
+  if (!drawnResults.length) {
+    summaryText.textContent = '還沒有任何「隱藏」的中籤選項';
+  } else {
+    summaryText.textContent = '已隱藏(確定中籤)的選項：' + drawnResults.join('、 ');
+  }
+  summaryBanner.style.display = 'inline-block';
+}
+function closeSummary() {
+  summaryBanner.style.display = 'none';
+}
+
+// =====================================================
+// 工具：深拷貝
+// =====================================================
+function deepCopy(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
+</script>
+</body>
+</html>
