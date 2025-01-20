@@ -25,12 +25,6 @@
       from { background-position: 0 0; }
       to   { background-position: 10000px 0; }
     }
-
-    /*
-      這個關鍵幀專門用於做「閃爍」(flicker)效果：
-      讓 .twinkling 層整體的透明度週期性地上下變動。
-      可自行調整時間或 opacity 參數讓效果更明顯。
-    */
     @keyframes twinkleOpacity {
       0%   { opacity: 1;   }
       50%  { opacity: 0.7; }
@@ -55,9 +49,8 @@
     .twinkling {
       background: transparent url("twinkling.png") repeat top center;
       z-index: 1;
-      /* 原本移動的動畫 + 新增 flicker (twinkleOpacity) 動畫 */
       animation: move-twink-back 200s linear infinite,
-                 twinkleOpacity 2s ease-in-out infinite;
+                 twinkleOpacity 2s ease-in-out infinite; 
     }
 
     /* 漂浮的雲層 */
@@ -106,42 +99,81 @@
       color: #eee; /* 預設文字顏色 */
     }
 
-    /* 編輯模式 (config-panel) */
+    /* 編輯模式 (config-panel)外面那圈 */
     .config-panel {
+      width: 30%;
+      margin-left: auto;
+      margin-right: auto;
       margin-bottom: 20px;
+      margin-top: 100px;
       padding: 10px;
       border-radius: 5px;
-      background-color: rgba(40, 40, 40, 0.85); /* 深色底+透明度 */
+      background-color: rgba(87, 150, 233, 0.85); /* 深色底+透明度 */
       border: 1px solid #666;
       color: #fff;
     }
     .config-panel h2 {
       margin-top: 0;
       color: #fff;
+      text-align: center; /* 置中顯示標題 */
     }
     .options-table {
-      width: 60%;
+      width: 90%;
       margin-left: auto;
       margin-right: auto;
       border-collapse: collapse;
       margin-bottom: 10px;
-      color: #fff;
-      background-color: transparent; /* 背景透明 */
+      margin-top: 10px;
+      color: #ffffff;
+      background-color: #9cd9ec; /* 淺藍色底 */
     }
     .options-table th, .options-table td {
       border: 1px solid #666;
       padding: 8px;
-      text-align: left;
-      
+      text-align: center;
     }
     .options-table input {
-      width: 90%;
+      width: 95%;
       color: #000;            /* 文字改為深色 */
-      background-color: #fff; /* 使輸入框是淺底 */
+      background-color: #f8fdaf; /* 使輸入框是淺底 */
       border: 1px solid #ccc;
       border-radius: 3px;
       padding: 4px;
     }
+
+    /* 按鈕置中 */
+    .enter-draw-btn-container {
+      text-align: center;
+      margin-top: 20px;
+    }
+
+    #addOptionBtn {
+        background-color: #ffa500; /* 橘色背景 */
+        border: none; /* 去除邊框 */
+        border-radius: 50%; /* 圓形 */
+        margin-top: 20px;
+        margin-left: 5%;
+        color: #fff; /* 白色文字 */
+        width: 40px; /* 按鈕寬度 */
+        height: 40px; /* 按鈕高度 */
+        cursor: pointer; /* 滑鼠指標變手形 */
+        font-size: 24px; /* 文字大小 */
+        font-weight: bold; /* 粗體文字 */
+        display: flex; /* 讓文字置中 */
+        align-items: center;
+        justify-content: center;
+        transition: background-color 0.3s, transform 0.2s; /* 平滑過渡效果 */
+      }
+      
+    
+      #addOptionBtn:hover {
+        background-color: #ffcc66; /* hover 時顏色變淡 */
+        transform: scale(1.1); /* 放大效果 */
+      }
+    
+      #addOptionBtn:active {
+        transform: scale(0.9); /* 點擊時縮小 */
+      }
 
     /* 隱藏 (原本程式用於控制UI顯示) */
     .hidden {
@@ -195,7 +227,6 @@
       transform: scale(1.2);
       cursor: pointer;
       margin: 0 5px;
-      
       transition: filter 0.2s;
     }
     .btn-lilac:hover {
@@ -215,6 +246,30 @@
     .btn-green:hover {
       filter: brightness(110%);
     }
+   
+    #enterDrawModeBtn{
+        margin-bottom: 10px;
+    }
+    .delete-btn {
+        background-color: #ff4d4d; /* 紅色背景 */
+        border: none; /* 去除邊框 */
+        border-radius: 50%; /* 圓形 */
+        color: #fff; /* 白色文字 */
+        width: 30px; /* 寬 */
+        height: 30px; /* 高 */
+        cursor: pointer; /* 滑鼠指標變手形 */
+        display: flex; /* 讓文字置中 */
+        align-items: center;
+        justify-content: center;
+        font-size: 16px; /* 文字大小 */
+        transition: background-color 0.3s; /* 平滑過渡效果 */
+        
+      }
+    
+      .delete-btn:hover {
+        background-color: #ff9999; /* hover 時背景顏色變淡 */
+      }
+      
 
     /* 抽籤模式下的「退出」按鈕位置 */
     #exitDrawModeBtn {
@@ -238,11 +293,6 @@
   <div class="twinkling"></div>
   <div class="clouds"></div>
 
-  <!-- 若不需要此標題，可整段刪除 -->
-  <!-- <div class="title">
-    <h1>A Dark and Mysterious Night</h1>
-  </div> -->
-
   <!-- 抽籤程式主體 -->
   <div class="lottery-app">
     <!-- (1) 編輯模式區域 -->
@@ -260,9 +310,12 @@
           <!-- 動態插入 -->
         </tbody>
       </table>
-      <button id="addOptionBtn">新增選項</button>
-      <br><br>
-      <button id="enterDrawModeBtn" class="btn-green">進入抽籤</button>
+      
+      <button id="addOptionBtn">+</button>
+
+      <div class="enter-draw-btn-container">
+        <button id="enterDrawModeBtn" class="btn-green">進入抽籤</button>
+      </div>
     </div>
 
     <!-- (2) 抽籤模式下的按鈕 -->
@@ -291,7 +344,7 @@
     </div>
   </div>
 
-  <!-- 抽籤功能的 JS (與原程式相同) -->
+  <!-- 抽籤功能的 JS (主程式) -->
   <script>
   // =====================================================
   // 全域資料/DOM 參考
@@ -331,13 +384,14 @@
   // 動畫鎖
   let isSpinning = false;
 
-
   // =====================================================
   // 初始化：先加幾個示範選項
   // =====================================================
-  addOptionRow('選項A', 50);
-  addOptionRow('選項B', 30);
-  addOptionRow('選項C', 10);
+  addOptionRow('選項A', 1);
+  addOptionRow('選項B', 1);
+  addOptionRow('選項C', 1);
+  addOptionRow('選項D', 1);
+  addOptionRow('選項E', 1);
 
   // 同步表格初始資料
   syncFromTable();
@@ -402,11 +456,14 @@
     closeBanner();
   });
 
-  // 【空白鍵】再抽一次
+  // 【空白鍵】只在抽籤模式下才觸發 startDraw()
   document.addEventListener('keydown', (e) => {
     if (e.code === 'Space') {
-      e.preventDefault();
-      startDraw();
+      // 先檢查輪盤是否顯示(即抽籤模式)
+      if (!wheelContainer.classList.contains('hidden')) {
+        e.preventDefault();
+        startDraw();
+      }
     }
   });
 
@@ -429,10 +486,12 @@
     valueInput.value = indexVal;
 
     const removeBtn = document.createElement('button');
-    removeBtn.textContent = '刪除';
+    removeBtn.textContent = '✕'; // 使用叉叉符號
+    removeBtn.className = 'delete-btn'; // 添加 CSS 類名
     removeBtn.addEventListener('click', () => {
-      tr.remove();
+    tr.remove(); // 刪除該行
     });
+    
 
     tdName.appendChild(nameInput);
     tdValue.appendChild(valueInput);
