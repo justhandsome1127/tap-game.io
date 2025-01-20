@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>絕對公平的抽籤！</title>
-  <!-- 載入 Google Fonts (可自行決定是否需要) -->
-  <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;1,400&display=swap" rel="stylesheet">
-
+ 
   <style>
     /* -----------------------------------------------
        [共用重置 & 夜空背景]
@@ -69,24 +67,7 @@
       background-color: #000; /* 若背景圖載入失敗，退而求其次 */
       position: relative;
       overflow-x: hidden;
-      overflow-y: auto; /* 內容若過長可捲動 */
-    }
-
-    .title {
-      position: relative;
-      z-index: 3; /* 讓標題顯示在背景之上 */
-      text-align: center;
-      margin-top: 100px;
-      color: #fff;
-    }
-    .title h1 {
-      font-size: 36px;
-      font-family: 'Lato', sans-serif;
-      background: -webkit-linear-gradient(#eee, #333);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-shadow: 6px 6px 0px rgba(0,0,0,0.2);
-      display: inline-block;
+      overflow-y: auto; /* 捲動 */
     }
 
     /* -----------------------------------------------
@@ -115,7 +96,7 @@
     .config-panel h2 {
       margin-top: 0;
       color: #fff;
-      text-align: center; /* 置中顯示標題 */
+      text-align: center; 
     }
     .options-table {
       width: 90%;
@@ -125,7 +106,7 @@
       margin-bottom: 10px;
       margin-top: 10px;
       color: #ffffff;
-      background-color: #9cd9ec; /* 淺藍色底 */
+      background-color: #9cd9ec; 
     }
     .options-table th, .options-table td {
       border: 1px solid #666;
@@ -134,35 +115,35 @@
     }
     .options-table input {
       width: 95%;
-      color: #000;            /* 文字改為深色 */
-      background-color: #f8fdaf; /* 使輸入框是淺底 */
+      color: #000;            
+      background-color: #f8fdaf; 
       border: 1px solid #ccc;
       border-radius: 3px;
       padding: 4px;
     }
 
-    /* 按鈕置中 */
+  
     .enter-draw-btn-container {
       text-align: center;
       margin-top: 20px;
     }
 
     #addOptionBtn {
-        background-color: #ffa500; /* 橘色背景 */
-        border: none; /* 去除邊框 */
-        border-radius: 50%; /* 圓形 */
+        background-color: #ffa500; 
+        border: none; 
+        border-radius: 50%; 
         margin-top: 20px;
         margin-left: 5%;
-        color: #fff; /* 白色文字 */
-        width: 40px; /* 按鈕寬度 */
-        height: 40px; /* 按鈕高度 */
-        cursor: pointer; /* 滑鼠指標變手形 */
-        font-size: 24px; /* 文字大小 */
-        font-weight: bold; /* 粗體文字 */
-        display: flex; /* 讓文字置中 */
+        color: #fff; 
+        width: 40px; 
+        height: 40px; 
+        cursor: pointer; 
+        font-size: 24px; 
+        font-weight: bold; 
+        display: flex; 
         align-items: center;
         justify-content: center;
-        transition: background-color 0.3s, transform 0.2s; /* 平滑過渡效果 */
+        transition: background-color 0.3s, transform 0.2s; 
       }
       
     
@@ -376,7 +357,7 @@
   const radius = canvasSize / 2;
 
   // 指針放大
-  const pointerOffset = 30; 
+  const pointerOffset = 80; 
   const pointerSide = 15;
 
   // 輪盤當前角度
@@ -486,8 +467,8 @@
     valueInput.value = indexVal;
 
     const removeBtn = document.createElement('button');
-    removeBtn.textContent = '✕'; // 使用叉叉符號
-    removeBtn.className = 'delete-btn'; // 添加 CSS 類名
+    removeBtn.textContent = '✕'; 
+    removeBtn.className = 'delete-btn'; 
     removeBtn.addEventListener('click', () => {
     tr.remove(); // 刪除該行
     });
@@ -727,7 +708,7 @@
     if (!drawnResults.length) {
       summaryText.textContent = '還沒有任何「隱藏」的中籤選項';
     } else {
-      summaryText.textContent = '已隱藏(確定中籤)的選項：' + drawnResults.join('、 ');
+      summaryText.textContent = '中籤的選項：' + drawnResults.join('、 ');
     }
     summaryBanner.style.display = 'inline-block';
   }
