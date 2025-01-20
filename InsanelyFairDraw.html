@@ -180,7 +180,6 @@
 // 全域資料/DOM 參考
 // =====================================================
 let allItems = []; // { name, indexValue, drawn, hidden }
-let originalItems = [];  // 進入抽籤模式時的快照
 let drawnResults = [];   // 只在 隱藏時 才將該選項加入這裡
 let currentWinner = null; // 這次抽到的項目
 
@@ -224,6 +223,7 @@ addOptionRow('選項A', 50);
 addOptionRow('選項B', 30);
 addOptionRow('選項C', 10);
 
+// 同步表格初始資料
 syncFromTable();
 renderWheel(currentRotation);
 
@@ -236,12 +236,12 @@ addOptionBtn.addEventListener('click', () => {
   addOptionRow('', 0);
 });
 
-// 進入抽籤模式
+// 進入抽籤模式：重新讀取表格、清空結果、初始角度
 enterDrawModeBtn.addEventListener('click', () => {
-  syncFromTable();
-  originalItems = deepCopy(allItems);
-  drawnResults = [];
-  currentRotation = 0;
+  syncFromTable();         // 從表格更新 allItems
+  drawnResults = [];       // 清空已中籤紀錄
+  currentRotation = 0;     // 重置角度
+  isSpinning = false;      // 解除旋轉鎖
 
   document.getElementById('configPanel').classList.add('hidden');
   wheelContainer.classList.remove('hidden');
@@ -250,18 +250,20 @@ enterDrawModeBtn.addEventListener('click', () => {
   renderWheel(currentRotation);
 });
 
-// 退出抽籤模式
+// 退出抽籤模式：下次再進入時，同樣會再次 syncFromTable()
 exitDrawModeBtn.addEventListener('click', () => {
-  allItems = deepCopy(originalItems);
-  currentRotation = 0;
-  isSpinning = false;
-
   closeBanner();
   closeSummary();
 
+  // 回到編輯模式
   document.getElementById('configPanel').classList.remove('hidden');
   wheelContainer.classList.add('hidden');
   exitDrawModeBtn.classList.add('hidden');
+
+  // 這邊不用特地覆蓋 allItems，因為下次進入抽籤模式時，會再 syncFromTable()
+  // 如需讓畫面「看起來」也是初始，可加上一行(但其實已隱藏也無所謂)：
+  currentRotation = 0;
+  isSpinning = false;
   renderWheel(currentRotation);
 });
 
@@ -341,18 +343,12 @@ function syncFromTable() {
     const name = row.querySelector('td:nth-child(1) input').value.trim();
     const val = parseFloat(row.querySelector('td:nth-child(2) input').value) || 0;
     if (name) {
-      const existed = allItems.find(it => it.name === name);
-      if (existed) {
-        existed.indexValue = val;
-        tempArr.push(existed);
-      } else {
-        tempArr.push({
-          name,
-          indexValue: val,
-          drawn: false,
-          hidden: false
-        });
-      }
+      tempArr.push({
+        name,
+        indexValue: val,
+        drawn: false,
+        hidden: false
+      });
     }
   });
 
@@ -363,62 +359,57 @@ function syncFromTable() {
 // 開始抽籤
 // =====================================================
 function startDraw() {
-    if (isSpinning) return;
-    closeBanner();
-    closeSummary();
-  
-    // 可抽清單：indexValue>0 && !hidden
-    let candidateList = allItems.filter(it => !it.hidden && it.indexValue > 0);
-    if (!candidateList.length) {
-      alert('沒有可抽的籤(都隱藏或加權=0)！');
-      return;
-    }
-  
-    // 用加權指數抽出中籤
-    let winner = getWeightedRandomOption(candidateList);
-    currentWinner = winner;
-  
+  if (isSpinning) return;
+  closeBanner();
+  closeSummary();
+
+  // 可抽清單：indexValue>0 && !hidden
+  let candidateList = allItems.filter(it => !it.hidden && it.indexValue > 0);
+  if (!candidateList.length) {
+    alert('沒有可抽的籤(都隱藏或加權=0)！');
+    return;
+  }
+
+  // 用加權指數抽出中籤
+  let winner = getWeightedRandomOption(candidateList);
+  currentWinner = winner;
+
   // 過濾出可見選項
   let visibleArr = allItems.filter(it => !it.hidden);
   let visibleCount = visibleArr.length;
-  
+
   // 找到中獎者在可見選項中的索引
   let winnerIndex = visibleArr.indexOf(winner);
   if (winnerIndex < 0) {
     console.error('winner not in visibleArr??');
     return;
   }
-  
+
   // 每個選項的角度範圍
   let sliceAngle = (2 * Math.PI) / visibleCount;
-  
+
   // 計算每個選項的當前中心角度
   // 起始點是 3 點鐘方向，考慮 currentRotation 的影響
   let optionAngles = visibleArr.map((_, index) => {
     return (currentRotation + index * sliceAngle + sliceAngle / 2) % (2 * Math.PI);
   });
-  
-  // 找到中獎選項的目標角度
+
+  // 找到中獎選項的目標角度 (要對準指針)
   let winnerCenterAngle = optionAngles[winnerIndex];
-  
-  // 計算最終旋轉角度
-  let baseRotation = 2 * Math.PI * 6; // 6圈 => 可自訂
+
+  // 設定最終旋轉角度 (多轉幾圈 + 把中獎扇形對準指針)
+  let baseRotation = 2 * Math.PI * 6; // 6圈 => 可自行微調
   let finalRotation = currentRotation + baseRotation + (2 * Math.PI - winnerCenterAngle);
-  
+
   // 兩段式動畫: 快速旋轉後減速到中獎選項
   spinWheelWithDeceleration(finalRotation, () => {
     bannerText.textContent = `${winner.name} 中籤！`;
     banner.style.display = 'inline-block';
   });
-  
-  
-  
-  
-  
-  }
+}
 
 // =====================================================
-// 加權指數抽中
+// 加權指數抽中 (機率分配)
 // =====================================================
 function getWeightedRandomOption(arr) {
   let total = arr.reduce((sum, o) => sum + o.indexValue, 0);
@@ -427,7 +418,7 @@ function getWeightedRandomOption(arr) {
     if (r < o.indexValue) return o;
     r -= o.indexValue;
   }
-  // 理論上不會到這
+  // 理論上不會到
   return arr[arr.length - 1];
 }
 
@@ -463,7 +454,7 @@ function spinWheelWithDeceleration(finalRotation, callback) {
     } else if (elapsed < phase1Duration + phase2Duration) {
       // --- Phase 2: ease-out 減速
       let t = (elapsed - phase1Duration) / phase2Duration; // 0..1
-      // easeOutCubic/easeOutQuad/easeOutExpo 等 => 讓後半段自然減速
+      // easeOutCubic => 讓後半段自然減速
       let e = easeOutCubic(t);
 
       let phase1Portion = 0.7;
@@ -476,11 +467,8 @@ function spinWheelWithDeceleration(finalRotation, callback) {
 
     } else {
       // --- 完成
-      // 最後設定 currentRotation
       currentRotation = finalRotation % (2 * Math.PI);
-      // 防負數
       if (currentRotation < 0) currentRotation += 2 * Math.PI;
-      // 四捨五入避免小誤差
       currentRotation = parseFloat(currentRotation.toFixed(6));
 
       renderWheel(currentRotation);
@@ -490,7 +478,7 @@ function spinWheelWithDeceleration(finalRotation, callback) {
   });
 }
 
-// ======== 常見 ease-out 函式 (可自行改用 easeOutQuad, easeOutExpo等) ========
+// ======== 常見 ease-out 函式 ========
 function easeOutCubic(x) {
   return 1 - Math.pow(1 - x, 3);
 }
@@ -579,20 +567,6 @@ function getColorForIndex(idx) {
 }
 
 // =====================================================
-// 加權指數抽中
-// =====================================================
-function getWeightedRandomOption(arr) {
-  let total = arr.reduce((sum, o) => sum + o.indexValue, 0);
-  let r = Math.random() * total;
-  for (let o of arr) {
-    if (r < o.indexValue) return o;
-    r -= o.indexValue;
-  }
-  // 理論上不會到
-  return arr[arr.length - 1];
-}
-
-// =====================================================
 // 顯示/關閉 橫幅
 // =====================================================
 function showBanner(msg) {
@@ -612,13 +586,6 @@ function showSummary() {
 }
 function closeSummary() {
   summaryBanner.style.display = 'none';
-}
-
-// =====================================================
-// 工具：深拷貝
-// =====================================================
-function deepCopy(obj) {
-  return JSON.parse(JSON.stringify(obj));
 }
 </script>
 </body>
